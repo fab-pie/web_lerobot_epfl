@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LEGARDEN</title>
+    <style>
+        html,body{height:100%;margin:0;background:#000000;color:#eaf6ea;overflow:hidden;font-family:Arial,Helvetica,sans-serif}
+        .wrap{height:100%;display:grid;grid-template-rows:58px 1fr}
+        header{display:flex;align-items:center;justify-content:center;padding:0 12px;font-size:1.35rem;font-weight:700;letter-spacing:0.14em;text-align:center}
+        main{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:12px;padding:0 8px 12px 4px;height:100%;box-sizing:border-box}
+        .plant-area{display:flex;align-items:flex-start;justify-content:center;width:min(50vw,580px);min-height:600px;padding-top:0;transform:translateY(-8px)}
+        .plant-stage{display:block;width:min(50vw,580px);height:min(72vh,650px);max-width:580px;position:relative;border-radius:18px;overflow:hidden;background:radial-gradient(circle at 50% 40%, rgba(255,255,255,0.08), rgba(255,255,255,0.01) 50%, rgba(0,0,0,0) 72%);border:2px solid rgba(255,255,255,0.06);filter:drop-shadow(0 14px 28px rgba(0,0,0,0.45));transition:border-color 180ms ease,box-shadow 180ms ease}
+        .plant-stage[data-state="good"]{border-color:rgba(100,240,138,0.78);box-shadow:0 0 34px rgba(100,240,138,0.28)}
+        .plant-stage[data-state="medium"]{border-color:rgba(244,211,94,0.78);box-shadow:0 0 34px rgba(244,211,94,0.22)}
+        .plant-stage[data-state="bad"]{border-color:rgba(239,107,107,0.8);box-shadow:0 0 34px rgba(239,107,107,0.26)}
+        .plant-stage canvas{display:block;width:100%;height:100%}
+        .plant-stage::after{content:attr(data-error);position:absolute;left:14px;right:14px;bottom:14px;color:#ffd6d6;font-size:0.82rem;line-height:1.35;pointer-events:none}
+        .info-col{display:flex;flex-direction:column;gap:50px;align-items:stretch;justify-content:flex-start;padding-top:25px;padding-right:10px;min-height:10}
+        .indicator-row{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+        .indicator{width:122px;height:122px;border-radius:50%;display:flex;align-items:center;justify-content:center;position:relative;box-shadow:0 8px 24px rgba(0,0,0,0.6);flex:1 1 122px;max-width:132px}
+        .indicator::before{content:'';position:absolute;width:100%;height:100%;border-radius:50%;border:4px solid currentColor;opacity:0.8;animation:spin 6s linear infinite}
+        .indicator-inner{width:104px;height:104px;border-radius:50%;background:rgba(255,255,255,0.02);display:grid;place-items:center;position:relative;z-index:2;border:2px solid rgba(255,255,255,0.08);text-align:center}
+        .indicator .val{font-size:1.45rem;font-weight:700;color:#f4fbf4}
+        .indicator .lbl{font-size:0.7rem;color:#93aa93;margin-top:4px;text-transform:uppercase;letter-spacing:0.08em}
+        .tip-box{max-width:340px;padding:0 6px 0 4px;text-align:left}
+        .tip-title{font-size:0.72rem;letter-spacing:0.12em;text-transform:uppercase;color:#93aa93;margin-bottom:6px}
+        .tip-text{font-size:0.92rem;line-height:1.4;color:#f3f8f3;margin:0}
+        .live-state{max-width:340px;padding:10px 6px 0 4px;color:#9fb39f;font-size:0.92rem;line-height:1.4}
+        .live-state strong{color:#f3f8f3}
+        .info-copy p{margin:0;line-height:1.35;font-size:0.92rem}
+        .info-copy .white{color:#f3f8f3}
+        .info-copy .gray{color:#9aa99a}
+        .info-copy .soft{color:#dfe8df}
+        @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+        footer{position:fixed;right:8px;bottom:8px;display:flex;align-items:center;gap:8px;background:rgba(8,20,11,0.92);padding:6px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);box-shadow:0 10px 28px rgba(0,0,0,0.45)}
+        footer input{height:36px;padding:6px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:#f5faf5}
+        footer button{height:36px;padding:6px 10px;border-radius:8px;border:0;cursor:pointer;font-weight:700;color:#061008}
+        .footer-toggle{width:40px;background:rgba(255,255,255,0.14);color:#f5faf5;font-size:1.05rem;line-height:1}
+        .footer-controls{display:flex;align-items:center;gap:8px;max-width:560px;overflow:hidden;transition:max-width 180ms ease,opacity 140ms ease}
+        footer.collapsed .footer-controls{max-width:0;opacity:0;pointer-events:none}
+        .status{margin-left:auto;color:#93aa93;font-weight:700;white-space:nowrap}
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <header>LEGARDEN</header>
+        <main>
+            <div class="plant-area">
+                <div class="plant-stage" id="plantStage" aria-label="3D plant model"></div>
+            </div>
+            <aside class="info-col">
+                <div class="indicator-row">
+                    <div class="indicator" id="indLight" style="color:#555"><div class="indicator-inner"><div><div class="val" id="vLight">--</div><div class="lbl">Light</div></div></div></div>
+                    <div class="indicator" id="indTemp" style="color:#555"><div class="indicator-inner"><div><div class="val" id="vTemp">--</div><div class="lbl">Temperature</div></div></div></div>
+                    <div class="indicator" id="indMoist" style="color:#555"><div class="indicator-inner"><div><div class="val" id="vMoist">--</div><div class="lbl" id="lblMoist">Humidity</div></div></div></div>
+                </div>
+                <div class="tip-box">
+                    <div class="tip-title">Garden tip</div>
+                    <p class="tip-text" id="gardenTip">Waiting for a fresh tip...</p>
+                </div>
+                <div class="live-state" id="liveState"><strong>No live sensor data yet.</strong> Connect the ESP32 to see real values.</div>
+            </aside>
+        </main>
+        <footer id="controlDock" class="collapsed">
+            <button class="footer-toggle" id="footerToggle" type="button" aria-label="Open connection controls" aria-expanded="false">...</button>
+            <div class="footer-controls">
+                <input id="portInput" placeholder="COM3" style="width:120px" />
+                <input id="baudInput" placeholder="115200" style="width:120px" />
+                <button id="connectBtn" style="background:linear-gradient(135deg,#56d364,#6ee7b7)">Connect</button>
+                <button id="disconnectBtn" style="background:rgba(255,255,255,0.06);color:#f5faf5">Disconnect</button>
+                <div class="status" id="connStatus">Offline</div>
+            </div>
+        </footer>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+        const plantStage = document.getElementById('plantStage');
+        const vLight = document.getElementById('vLight');
+        const vTemp = document.getElementById('vTemp');
+        const vMoist = document.getElementById('vMoist');
+        const lblMoist = document.getElementById('lblMoist');
+        const connStatus = document.getElementById('connStatus');
+        const controlDock = document.getElementById('controlDock');
+        const footerToggle = document.getElementById('footerToggle');
+        const portInput = document.getElementById('portInput');
+        const baudInput = document.getElementById('baudInput');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const gardenTip = document.getElementById('gardenTip');
+        const liveState = document.getElementById('liveState');
+        const demoState = { light: 72, temp: 24.5, moist: 38, connected: false };
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050505);
+        const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+        camera.position.set(0, 1.4, 6.5);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        plantStage.appendChild(renderer.domElement);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 3.2));
+
+        const keyLight = new THREE.DirectionalLight(0xffffff, 2.0);
+        keyLight.position.set(2.5, 6, 5);
+        scene.add(keyLight);
+
+        const fillLight = new THREE.DirectionalLight(0xbbe8ff, 1.4);
+        fillLight.position.set(-5, 3, 4);
+        scene.add(fillLight);
+
+        const floorGlow = new THREE.PointLight(0x7de39a, 2.8, 30);
+        floorGlow.position.set(0, -2.5, 4);
+        scene.add(floorGlow);
+
+        const rimLight = new THREE.DirectionalLight(0xffffff, 1.1);
+        rimLight.position.set(0, 2, -4);
+        scene.add(rimLight);
+
+        const modelGroup = new THREE.Group();
+        scene.add(modelGroup);
+
+        let plantHelper = null;
+
+        const loader = new GLTFLoader();
+        const baseMaterials = new Map();
+        let plantModel = null;
+        window.__plantDebug = { loaded: false, size: null, radius: null, renderCount: 0 };
+
+        function tintForState(state){
+            if (state === 'good') return new THREE.Color('#64f08a');
+            if (state === 'bad') return new THREE.Color('#ef6b6b');
+            return new THREE.Color('#f4d35e');
+        }
+
+        function applyPlantTint(state){
+            plantStage.dataset.state = state;
+            if (!plantModel) return;
+            const tint = tintForState(state);
+            plantModel.traverse((object)=>{
+                if (!object.isMesh) return;
+                const materials = Array.isArray(object.material) ? object.material : [object.material];
+                for (const material of materials) {
+                    if (!material || !material.color) continue;
+                    const base = baseMaterials.get(material.uuid);
+                    if (!base) continue;
+                    material.color.copy(base.color).lerp(tint, 0.45);
+                    if (material.emissive && base.emissive) {
+                        material.emissive.copy(base.emissive).add(tint.clone().multiplyScalar(state === 'good' ? 0.08 : 0.04));
+                    }
+                    material.needsUpdate = true;
+                }
+            });
+        }
+
+        function addWireframeOverlay(mesh){
+            const outlineMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.9,
+                depthWrite: false,
+            });
+            baseMaterials.set(outlineMaterial.uuid, {
+                color: outlineMaterial.color.clone(),
+                emissive: null,
+            });
+            const outline = new THREE.Mesh(mesh.geometry, outlineMaterial);
+            outline.renderOrder = 1000;
+            outline.scale.setScalar(1.003);
+            outline.userData.isOutline = true;
+            mesh.add(outline);
+        }
+
+        function toVisibleBasicMaterial(material){
+            const map = material.map || null;
+            if (map) {
+                map.colorSpace = THREE.SRGBColorSpace;
+                map.needsUpdate = true;
+            }
+            const visibleMaterial = new THREE.MeshBasicMaterial({
+                map,
+                transparent: false,
+                side: THREE.DoubleSide,
+                color: map ? new THREE.Color(0xffffff) : (material.color ? material.color.clone() : new THREE.Color(0xffffff)),
+                opacity: 1,
+                toneMapped: false,
+            });
+            baseMaterials.set(visibleMaterial.uuid, {
+                color: visibleMaterial.color.clone(),
+                emissive: null,
+            });
+            return visibleMaterial;
+        }
+
+        loader.load('/static/white_flower/scene.gltf', (gltf)=>{
+            plantModel = gltf.scene;
+            const meshes = [];
+            plantModel.traverse((object)=>{
+                if (!object.isMesh || object.userData.isOutline) return;
+                meshes.push(object);
+                const materials = Array.isArray(object.material) ? object.material : [object.material];
+                for (const material of materials) {
+                    if (material && material.color && !baseMaterials.has(material.uuid)) {
+                        baseMaterials.set(material.uuid, {
+                            color: material.color.clone(),
+                            emissive: material.emissive ? material.emissive.clone() : null,
+                        });
+                    }
+                }
+                object.material = Array.isArray(object.material)
+                    ? object.material.map((material) => toVisibleBasicMaterial(material))
+                    : toVisibleBasicMaterial(object.material);
+            });
+
+            for (const mesh of meshes) {
+                addWireframeOverlay(mesh);
+            }
+
+            const box = new THREE.Box3().setFromObject(plantModel);
+            const size = box.getSize(new THREE.Vector3());
+            const center = box.getCenter(new THREE.Vector3());
+            const sphere = box.getBoundingSphere(new THREE.Sphere());
+            const maxDim = Math.max(size.x, size.y, size.z) || 1;
+            const plantScale = 13.0 / maxDim;
+            window.__plantDebug = { loaded: true, size: [size.x, size.y, size.z], radius: sphere.radius, renderCount: window.__plantDebug.renderCount || 0 };
+
+            const plantPivot = new THREE.Group();
+            plantModel.position.copy(center).multiplyScalar(-1);
+            plantPivot.scale.setScalar(plantScale);
+            plantPivot.rotation.y = Math.PI;
+            plantPivot.add(plantModel);
+            modelGroup.add(plantPivot);
+
+            const framedRadius = sphere.radius * plantScale;
+            camera.position.set(0, framedRadius * 0.08, Math.max(framedRadius * 2.65, 9));
+            camera.lookAt(0, 0, 0);
+            applyPlantTint('medium');
+        }, undefined, (error)=>{
+            console.warn('GLTF load failed', error);
+            plantStage.setAttribute('data-error', 'Model failed to load. Start dashboard.py and open http://127.0.0.1:8000/');
+        });
+
+        function resizePlantCanvas(){
+            const width = plantStage.clientWidth || 1;
+            const height = plantStage.clientHeight || 1;
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height, false);
+        }
+
+        window.addEventListener('resize', resizePlantCanvas);
+        resizePlantCanvas();
+
+        setInterval(()=>{
+            if (modelGroup) modelGroup.rotation.y += 0.0045;
+            if (plantHelper) plantHelper.update();
+            window.__plantDebug.renderCount += 1;
+            renderer.render(scene, camera);
+        }, 33);
+
+        const gardeningTips = [
+            'Water early in the morning to reduce evaporation.',
+            'Check the soil before watering again.',
+            'Give plants more light if leaves look pale.',
+            'Trim dead leaves to help new growth.',
+            'Keep pots draining well to avoid root rot.',
+            'Rotate plants sometimes so they grow evenly.'
+        ];
+        let tipIndex = 0;
+
+        function showTip(index){
+            if (!gardenTip || gardeningTips.length === 0) return;
+            gardenTip.textContent = gardeningTips[index % gardeningTips.length];
+        }
+
+        async function toggleFullscreen(){
+            if (document.fullscreenElement) {
+                await document.exitFullscreen();
+                return;
+            }
+            await document.documentElement.requestFullscreen();
+        }
+
+        function setPlantState(state){
+            applyPlantTint(state);
+        }
+
+function plantTone(light,temp,moist){ const good=[light>=80,temp>=18&&temp<=27,moist>=30].filter(Boolean).length; if(moist===0) return {tone:'warn',state:'medium',label:'Medium'}; if(good===3) return {tone:'ok',state:'good',label:'Healthy'}; if(good>=2) return {tone:'warn',state:'medium',label:'Medium'}; return {tone:'error',state:'bad',label:'Bad'} }
+        function setEmpty(){ vLight.textContent='--'; vTemp.textContent='--'; vMoist.textContent='--'; lblMoist.textContent='Humidity'; setPlantState('medium'); connStatus.textContent='Offline'; document.getElementById('indLight').style.color='#555'; document.getElementById('indTemp').style.color='#555'; document.getElementById('indMoist').style.color='#555' }
+        function setDemoState(){
+            const { light, temp, moist } = demoState;
+            vLight.textContent=Math.round(light);
+            vTemp.textContent=temp.toFixed(1);
+            vMoist.textContent=Math.round(moist);
+            lblMoist.textContent='Humidity';
+            document.getElementById('indLight').style.color=getColorForLight(light);
+            document.getElementById('indTemp').style.color=getColorForTemp(temp);
+            document.getElementById('indMoist').style.color=getColorForMoist(moist);
+            setPlantState(plantTone(light, temp, moist).state);
+            connStatus.textContent='Demo mode';
+            setDefaultLiveState('<strong>Demo mode.</strong> No ESP32 detected, showing sample values.');
+        }
+        function setDefaultLiveState(text){ if (!liveState) return; liveState.innerHTML = text || '<strong>No live sensor data yet.</strong> Connect the ESP32 to see real values.'; }
+
+        function getColorForLight(light){ if(light>=80) return '#2ecc71'; if(light>=50) return '#f1c40f'; return '#e74c3c' }
+        function getColorForTemp(temp){ if(temp>=18&&temp<=27) return '#2ecc71'; if(temp<20||temp>25) return '#f1c40f'; return '#e74c3c' }
+        function getColorForMoist(moist){ if(moist===0) return '#e74c3c'; if(moist>=30) return '#2ecc71'; if(moist>=20) return '#f1c40f'; return '#e74c3c' }
+
+        function render(state){ if(!state) { setDemoState(); return; } const latest=state.latest; connStatus.textContent=state.connected? 'Online':'Offline'; if(!latest) { setDemoState(); return; } setDefaultLiveState('<strong>Live data received.</strong>'); const light=Number(latest.light), temp=Number(latest.temp), moist=Number(latest.moisture); vLight.textContent=Math.round(light); vTemp.textContent=temp.toFixed(1); if(moist===0){ vMoist.textContent='0'; lblMoist.textContent='Humidity' } else { vMoist.textContent=Math.round(moist); lblMoist.textContent='Humidity' } document.getElementById('indLight').style.color=getColorForLight(light); document.getElementById('indTemp').style.color=getColorForTemp(temp); document.getElementById('indMoist').style.color=getColorForMoist(moist); const p=plantTone(light,temp,moist); setPlantState(p.state) }
+
+        async function fetchState(){ try{ const r=await fetch('/api/state',{cache:'no-store'}); if(!r.ok) throw new Error('HTTP '+r.status); render(await r.json()) }catch(e){ connStatus.textContent='Error' }}
+
+        async function postJson(url,p){ const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p||{})}); if(!r.ok){const t=await r.text(); throw new Error(t||r.status)} return r.json() }
+
+        footerToggle.onclick=()=>{ const collapsed=controlDock.classList.toggle('collapsed'); footerToggle.setAttribute('aria-expanded', String(!collapsed)); footerToggle.setAttribute('aria-label', collapsed ? 'Open connection controls' : 'Close connection controls') }
+        connectBtn.onclick=async ()=>{ connectBtn.disabled=true; try{ const port=portInput.value||''; const baud=Number(baudInput.value||115200); await postJson('/api/connect',{port,baud}); await fetchState() }catch(e){ console.warn(e) } finally{ connectBtn.disabled=false } }
+        disconnectBtn.onclick=async ()=>{ disconnectBtn.disabled=true; try{ await postJson('/api/disconnect',{}); await fetchState() }catch(e){} finally{ disconnectBtn.disabled=false } }
+
+        document.addEventListener('keydown', async (event)=>{
+            if (event.key.toLowerCase() !== 'f') return;
+            if (event.target && ['INPUT','TEXTAREA','SELECT'].includes(event.target.tagName)) return;
+            try { await toggleFullscreen(); } catch (e) { console.warn(e); }
+        });
+
+        showTip(tipIndex);
+        setInterval(()=>{
+            tipIndex = (tipIndex + 1) % gardeningTips.length;
+            showTip(tipIndex);
+        }, 60000);
+
+        setInterval(fetchState,900); fetchState();
+    </script>
+</body>
+</html>
